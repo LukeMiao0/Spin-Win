@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Student } from '../types';
 import { generateQuizQuestion } from '../services/geminiService';
 import { playTick, playWin } from '../services/audioService';
-import { Play, Sparkles, RotateCcw, BrainCircuit, Loader2, UserCheck, Volume2 } from 'lucide-react';
+import { Play, Sparkles, RotateCcw, BrainCircuit, Loader2, UserCheck, Volume2, Hand } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface PickerProps {
@@ -11,39 +11,29 @@ interface PickerProps {
   onSkip: (id: string) => void;
 }
 
-interface GroupDiceProps {
-  groupName: string;
-  groupId: number;
-  students: Student[];
-  selectedStudentId: string | null;
-  onPick: (student: Student) => void;
-  colorTheme: 'red' | 'blue';
-  disabled?: boolean;
-}
-
-const GroupDice: React.FC<GroupDiceProps> = ({ 
-  groupName, 
-  groupId, 
-  students, 
-  selectedStudentId, 
-  onPick, 
-  colorTheme,
-  disabled 
-}) => {
+export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) => {
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [aiQuestion, setAiQuestion] = useState<{ q: string; a: string } | null>(null);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [currentName, setCurrentName] = useState("Ready");
-  
-  // Refs for animation loop
+  const [displayName, setDisplayName] = useState("Ready");
+  const [displayGroup, setDisplayGroup] = useState<number | null>(null);
+  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+
+  // Refs for animation
   const timerRef = useRef<number | null>(null);
   const speedRef = useRef<number>(50);
-  const studentIndexRef = useRef<number>(0);
 
-  // Determine current display state
   const activeStudent = students.find(s => s.id === selectedStudentId);
-  // If the globally selected student belongs to this group, show them. Otherwise "Ready".
-  const displayText = isSpinning 
-    ? currentName 
-    : (activeStudent ? activeStudent.name : "Ready");
+  const presentStudents = students.filter(s => s.isPresent);
+
+  // Group colors for spinning UI
+  const GROUP_COLORS = {
+    1: 'text-red-500',
+    2: 'text-blue-500',
+    3: 'text-emerald-500'
+  };
 
   // Cleanup
   useEffect(() => {
@@ -53,118 +43,61 @@ const GroupDice: React.FC<GroupDiceProps> = ({
   }, []);
 
   const startSpin = () => {
-    if (students.length === 0 || disabled) return;
+    if (presentStudents.length === 0) return;
     
     setIsSpinning(true);
-    speedRef.current = 30; // Start fast
+    setSelectedStudentId(null);
+    setAiQuestion(null);
+    speedRef.current = 50;
     
-    const spin = () => {
-      playTick(); // Sound
-
-      // Next name
-      studentIndexRef.current = (studentIndexRef.current + 1) % students.length;
-      const randomIndex = Math.floor(Math.random() * students.length);
-      setCurrentName(students[randomIndex].name);
-      
-      // Check if we should stop
-      if (speedRef.current > 400) {
-        const finalIndex = Math.floor(Math.random() * students.length);
-        const winner = students[finalIndex];
-        setCurrentName(winner.name);
+    // Logic: "Counts of draws equally distributed among 3 groups"
+    // 1. Pick a random group (1-3)
+    // 2. Pick a random student from that group
+    // This ensures even if Group 1 has 20 people and Group 2 has 2, they have equal chance of being the "winning group".
+    
+    const availableGroups = [1, 2, 3].filter(g => students.some(s => s.isPresent && s.group === g));
+    
+    if (availableGroups.length === 0) {
         setIsSpinning(false);
-        onPick(winner); // Notify parent
-        playWin(); // Sound
+        return;
+    }
+
+    const spin = () => {
+      playTick();
+
+      // Visual shuffle
+      const randomGroup = availableGroups[Math.floor(Math.random() * availableGroups.length)];
+      const groupStudents = students.filter(s => s.isPresent && s.group === randomGroup);
+      const randomStudent = groupStudents[Math.floor(Math.random() * groupStudents.length)];
+      
+      if (randomStudent) {
+        setDisplayName(randomStudent.name);
+        setDisplayGroup(randomStudent.group || null);
+      }
+
+      // Stop condition (approx 2 seconds)
+      if (speedRef.current > 300) {
+        // DECIDE WINNER
+        const winningGroup = availableGroups[Math.floor(Math.random() * availableGroups.length)];
+        const winners = students.filter(s => s.isPresent && s.group === winningGroup);
+        const winner = winners[Math.floor(Math.random() * winners.length)];
+
+        if (winner) {
+            setDisplayName(winner.name);
+            setDisplayGroup(winner.group || null);
+            setSelectedStudentId(winner.id);
+            playWin();
+        }
+        setIsSpinning(false);
         return;
       }
 
-      // Slow down
-      speedRef.current = Math.floor(speedRef.current * 1.1);
+      // Decaying speed
+      speedRef.current = Math.floor(speedRef.current * 1.15); // Faster decay for 2s duration
       timerRef.current = window.setTimeout(spin, speedRef.current);
     };
 
     spin();
-  };
-
-  const themeStyles = colorTheme === 'red' 
-    ? {
-        gradient: 'from-rose-500 to-red-600',
-        ring: 'ring-rose-400/50',
-        button: 'text-rose-600 border-rose-100 hover:border-rose-200',
-        label: 'bg-rose-700'
-      }
-    : {
-        gradient: 'from-blue-500 to-indigo-600',
-        ring: 'ring-blue-400/50',
-        button: 'text-blue-600 border-blue-100 hover:border-blue-200',
-        label: 'bg-blue-700'
-      };
-
-  return (
-    <div className="flex flex-col items-center gap-4 w-full">
-      {/* Dice Display Box */}
-      <div className={`
-        relative w-full h-48 sm:h-64 bg-gradient-to-br ${themeStyles.gradient}
-        rounded-2xl shadow-xl flex items-center justify-center overflow-hidden border-8 border-white/20
-        ${isSpinning ? `animate-pulse ring-4 ${themeStyles.ring}` : ''}
-        transition-all duration-300
-      `}>
-        {/* Group Label */}
-        <div className={`absolute top-0 left-0 px-4 py-1 ${themeStyles.label} text-white text-xs font-bold rounded-br-xl shadow-sm z-20`}>
-          {groupName} ({students.length})
-        </div>
-
-        {/* Background pattern */}
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
-        
-        <AnimatePresence mode="wait">
-          <motion.h1
-            key={displayText}
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 1.2, opacity: 0 }}
-            transition={{ duration: 0.05 }}
-            className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight z-10 text-center px-2 drop-shadow-lg break-words w-full"
-          >
-            {students.length === 0 ? "Empty" : displayText}
-          </motion.h1>
-        </AnimatePresence>
-      </div>
-
-      {/* Roll Button */}
-      <button
-        onClick={startSpin}
-        disabled={isSpinning || students.length === 0 || disabled}
-        className={`
-          group relative w-full py-4 bg-white font-black text-xl rounded-xl shadow-lg 
-          transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed
-          border-b-4 ${themeStyles.button}
-        `}
-      >
-        <span className="flex items-center justify-center gap-2">
-          {isSpinning ? <Loader2 className="animate-spin w-6 h-6" /> : <Play className="w-6 h-6 fill-current" />}
-          {isSpinning ? 'ROLLING...' : `ROLL ${groupName.toUpperCase()}`}
-        </span>
-      </button>
-    </div>
-  );
-};
-
-export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) => {
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [aiQuestion, setAiQuestion] = useState<{ q: string; a: string } | null>(null);
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
-  const [showAnswer, setShowAnswer] = useState(false);
-
-  // Split students by group
-  const group1Students = students.filter(s => s.isPresent && s.group === 1);
-  const group2Students = students.filter(s => s.isPresent && s.group === 2);
-  
-  const activeStudent = students.find(s => s.id === selectedStudentId);
-
-  const handlePick = (student: Student) => {
-    setSelectedStudentId(student.id);
-    setAiQuestion(null);
-    setShowAnswer(false);
   };
 
   const handleGenerateQuestion = async () => {
@@ -197,42 +130,109 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
   const resetRound = () => {
     setSelectedStudentId(null);
     setAiQuestion(null);
+    setDisplayName("Ready");
+    setDisplayGroup(null);
+  };
+
+  const handleVolunteerSelect = (student: Student) => {
+      setSelectedStudentId(student.id);
+      setDisplayName(student.name);
+      setDisplayGroup(student.group || null);
+      setShowVolunteerModal(false);
+      setAiQuestion(null);
   };
 
   return (
     <div className="w-full mx-auto flex flex-col gap-8 pb-12">
       
-      {/* Dice Area */}
-      <div className="grid md:grid-cols-2 gap-6 w-full">
-        <GroupDice 
-          groupName="Group 1"
-          groupId={1}
-          students={group1Students}
-          selectedStudentId={selectedStudentId}
-          onPick={handlePick}
-          colorTheme="red"
-          disabled={!!selectedStudentId} // Optional: Disable other dice while one is selected? Or allow switching? Let's allow switching.
-        />
-        <GroupDice 
-          groupName="Group 2"
-          groupId={2}
-          students={group2Students}
-          selectedStudentId={selectedStudentId}
-          onPick={handlePick}
-          colorTheme="blue"
-          disabled={!!selectedStudentId}
-        />
+      {/* Spinner Display */}
+      <div className="relative w-full">
+          <div className={`
+            relative h-56 sm:h-72 w-full bg-white rounded-3xl shadow-xl border-4 border-slate-100 overflow-hidden flex flex-col items-center justify-center
+            transition-all duration-300 ${isSpinning ? 'ring-4 ring-indigo-200 scale-[1.01]' : ''}
+          `}>
+             <div className="absolute inset-0 bg-slate-50 opacity-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"></div>
+             
+             {/* Group Indicator */}
+             {displayGroup && (
+                 <div className={`absolute top-6 text-lg font-bold uppercase tracking-widest ${GROUP_COLORS[displayGroup as keyof typeof GROUP_COLORS] || 'text-slate-400'}`}>
+                     Group {displayGroup}
+                 </div>
+             )}
+
+             <AnimatePresence mode="wait">
+                <motion.div
+                    key={displayName}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 1.5, opacity: 0 }}
+                    className="z-10 text-center px-4"
+                >
+                    <h1 className={`text-4xl sm:text-6xl font-black tracking-tight ${selectedStudentId ? 'text-indigo-600' : 'text-slate-800'}`}>
+                        {displayName}
+                    </h1>
+                </motion.div>
+             </AnimatePresence>
+          </div>
+
+          {/* Controls */}
+          <div className="absolute -bottom-6 left-0 right-0 flex justify-center gap-4">
+              <button
+                onClick={startSpin}
+                disabled={isSpinning || presentStudents.length === 0}
+                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white rounded-2xl shadow-lg shadow-indigo-200 font-bold text-xl flex items-center gap-2 transition-all transform hover:scale-105 active:scale-95"
+              >
+                 {isSpinning ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />}
+                 {isSpinning ? 'Spinning...' : 'SPIN'}
+              </button>
+              
+              <button
+                 onClick={() => setShowVolunteerModal(true)}
+                 disabled={isSpinning}
+                 className="px-4 py-4 bg-white hover:bg-slate-50 text-slate-600 border-2 border-slate-200 rounded-2xl shadow-md font-bold flex items-center gap-2 transition-all hover:scale-105"
+                 title="Select Volunteer"
+              >
+                  <Hand className="w-6 h-6 text-orange-500" />
+                  <span className="hidden sm:inline">Volunteer</span>
+              </button>
+          </div>
       </div>
 
       {/* Hint if no one is checked in */}
-      {group1Students.length === 0 && group2Students.length === 0 && (
-         <div className="text-center p-8 bg-white rounded-xl border border-dashed border-slate-300">
+      {presentStudents.length === 0 && (
+         <div className="text-center mt-8 p-8 bg-white rounded-xl border border-dashed border-slate-300">
             <UserCheck className="w-8 h-8 text-slate-400 mx-auto mb-2" />
             <p className="text-slate-500">No students checked in yet. Go to the Check In tab.</p>
          </div>
       )}
 
+      {/* Volunteer Modal */}
+      {showVolunteerModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                      <h3 className="font-bold text-lg flex items-center gap-2">
+                          <Hand className="w-5 h-5 text-orange-500" /> Select Volunteer
+                      </h3>
+                      <button onClick={() => setShowVolunteerModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">Close</button>
+                  </div>
+                  <div className="overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {presentStudents.map(s => (
+                          <button 
+                             key={s.id}
+                             onClick={() => handleVolunteerSelect(s)}
+                             className="p-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left font-medium text-slate-700 truncate"
+                          >
+                              {s.name}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Action Panel (Only visible when a student is picked) */}
+      <div className="mt-8">
       <AnimatePresence>
         {activeStudent && (
           <motion.div 
@@ -308,6 +308,7 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">
                   Award Points
                 </h3>
+                
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                   <button 
                     onClick={handleSkip} 
@@ -316,14 +317,15 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
                     Skip
                   </button>
                   <div className="w-px h-14 bg-slate-200 mx-2 hidden sm:block"></div>
+                  
                   {[1, 2, 3, 4, 5].map((points) => (
                     <button
                       key={points}
                       onClick={() => handleScore(points)}
                       className={`
                         w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center font-black text-2xl shadow-sm transition-all transform hover:scale-105 active:scale-95 border-b-4
-                        ${points >= 4 
-                            ? 'bg-yellow-400 text-yellow-900 border-yellow-500 hover:bg-yellow-300' 
+                        ${points >= 2 
+                            ? 'bg-yellow-400 text-yellow-900 border-yellow-500 hover:bg-yellow-300 ring-2 ring-offset-2 ring-yellow-100' // Highlight volunteer range
                             : 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200'}
                       `}
                     >
@@ -331,11 +333,15 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
                     </button>
                   ))}
                 </div>
+                <div className="text-xs text-slate-400 mt-3 font-medium">
+                   Tip: Volunteers typically earn 2-5 points!
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 };

@@ -7,33 +7,26 @@ interface LeaderboardProps {
   students: Student[];
 }
 
-const GROUP_COLORS_BG = {
-  1: 'bg-red-500',
-  2: 'bg-blue-500',
-};
-
-const GROUP_COLORS_TEXT = {
-  1: 'text-red-600',
-  2: 'text-blue-600',
+const GROUP_CONFIG = {
+  1: { bg: 'bg-red-500', text: 'text-red-600', label: 'Group 1' },
+  2: { bg: 'bg-blue-500', text: 'text-blue-600', label: 'Group 2' },
+  3: { bg: 'bg-emerald-500', text: 'text-emerald-600', label: 'Group 3' },
 };
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({ students }) => {
   // Calculate Group Scores
   const groupScores = useMemo(() => {
-    const scores = { 1: 0, 2: 0 };
+    const scores = { 1: 0, 2: 0, 3: 0 };
     students.forEach(s => {
-      if (s.group && s.score > 0) {
-        // Only count for valid groups 1 and 2
-        if (s.group === 1 || s.group === 2) {
-             scores[s.group] += s.score;
-        }
+      if (s.group && s.score > 0 && (s.group === 1 || s.group === 2 || s.group === 3)) {
+         scores[s.group as keyof typeof scores] += s.score;
       }
     });
     return scores;
   }, [students]);
 
   // Find max score for bar chart scaling
-  const maxGroupScore = Math.max(...(Object.values(groupScores) as number[]), 10); // Min height of 10 for scale
+  const maxGroupScore = Math.max(...(Object.values(groupScores) as number[]), 10); 
 
   // Individual Leaderboard
   const sortedStudents = [...students].sort((a, b) => b.score - a.score);
@@ -48,22 +41,23 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ students }) => {
           Group Performance
         </h3>
         
-        <div className="h-40 flex items-end justify-center gap-8 px-2">
-          {[1, 2].map((groupNum) => {
+        <div className="h-40 flex items-end justify-center gap-4 sm:gap-8 px-2">
+          {[1, 2, 3].map((groupNum) => {
             const score = groupScores[groupNum as keyof typeof groupScores];
-            const heightPercentage = Math.max((score / maxGroupScore) * 100, 5); // Min 5% height
+            const heightPercentage = Math.max((score / maxGroupScore) * 100, 5); 
+            const config = GROUP_CONFIG[groupNum as keyof typeof GROUP_CONFIG];
             
             return (
-              <div key={groupNum} className="flex flex-col items-center gap-2 flex-1 max-w-[120px] group">
+              <div key={groupNum} className="flex flex-col items-center gap-2 flex-1 max-w-[80px] group">
                 <div className="text-xs font-bold text-slate-600">{score}</div>
                 <motion.div 
                   initial={{ height: 0 }}
                   animate={{ height: `${heightPercentage}%` }}
                   transition={{ type: 'spring', stiffness: 100 }}
-                  className={`w-full rounded-t-lg relative ${GROUP_COLORS_BG[groupNum as keyof typeof GROUP_COLORS_BG]} opacity-80 group-hover:opacity-100 transition-opacity`}
+                  className={`w-full rounded-t-lg relative ${config.bg} opacity-80 group-hover:opacity-100 transition-opacity`}
                 >
                 </motion.div>
-                <div className={`text-lg font-black ${GROUP_COLORS_TEXT[groupNum as keyof typeof GROUP_COLORS_TEXT]}`}>
+                <div className={`text-sm font-black ${config.text} whitespace-nowrap`}>
                   G{groupNum}
                 </div>
               </div>
@@ -102,9 +96,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ students }) => {
                   </div>
                   <div className="flex flex-col">
                     <span className="font-semibold text-slate-700">{student.name}</span>
-                    {student.group && (
-                       <span className={`text-[10px] font-bold ${GROUP_COLORS_TEXT[student.group as keyof typeof GROUP_COLORS_TEXT]}`}>
-                         Group {student.group}
+                    {student.group && GROUP_CONFIG[student.group as keyof typeof GROUP_CONFIG] && (
+                       <span className={`text-[10px] font-bold ${GROUP_CONFIG[student.group as keyof typeof GROUP_CONFIG].text}`}>
+                         {GROUP_CONFIG[student.group as keyof typeof GROUP_CONFIG].label}
                        </span>
                     )}
                   </div>

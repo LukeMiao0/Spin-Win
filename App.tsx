@@ -11,27 +11,32 @@ import { v4 as uuidv4 } from 'uuid'; // If uuid not available, simple counter wo
 // Utility for simple IDs
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-const STORAGE_KEY_STUDENTS = 'classroom-spin-students-v2'; // Bumped version for group support
-const STORAGE_KEY_HISTORY = 'classroom-spin-history-v2';
+const STORAGE_KEY_STUDENTS = 'classroom-spin-students-v3'; // Bumped version for new student list
+const STORAGE_KEY_HISTORY = 'classroom-spin-history-v3';
 
 // Parse initial data
 const INITIAL_STUDENTS_PARSED: Student[] = RAW_DATA.split('\n')
   .filter(line => line.trim() !== '')
-  .map((line, index) => ({
-    id: `student-${index}`,
-    name: line.replace(/^1,/, '').trim(),
-    isPresent: false,
-    score: 0,
-    group: undefined
-  }));
+  .map((line, index) => {
+    // Handle format: "1141601 Name Name"
+    const parts = line.trim().split(/\s+/); // Split by spaces
+    const studentId = parts[0]; 
+    const studentName = parts.slice(1).join(' ');
+
+    return {
+      id: studentId || `student-${index}`, // Use student number as ID
+      name: studentName || line.trim(),
+      isPresent: false,
+      score: 0,
+      group: undefined
+    };
+  });
 
 export default function App() {
   // Load state from localStorage or fallback to initial
   const [students, setStudents] = useState<Student[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_STUDENTS);
     if (saved) {
-        // Migration check: if saved data doesn't look compatible or if we want fresh load on version bump
-        // simple parse for now.
         return JSON.parse(saved);
     } 
     return INITIAL_STUDENTS_PARSED;
@@ -66,18 +71,34 @@ export default function App() {
     setHistory(prev => [newEntry, ...prev]);
   };
 
-  const handleToggleAttendance = (id: string, group: number) => {
+  const handleToggleAttendance = (id: string) => {
     setStudents(prev => prev.map(s => {
         if (s.id === id) {
-            // If already present in this specific group, toggle off (absent)
-            // If absent or in different group, set to present + new group
-            if (s.isPresent && s.group === group) {
-                return { ...s, isPresent: false, group: undefined };
-            } else {
-                return { ...s, isPresent: true, group: group };
-            }
+            // If marking present, assign random group 1-3
+            const randomGroup = Math.floor(Math.random() * 3) + 1;
+            return { ...s, isPresent: true, group: randomGroup };
         }
         return s;
+    }));
+  };
+
+  const handleCycleGroup = (id: string) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id === id && s.isPresent && s.group) {
+        // Cycle 1 -> 2 -> 3 -> 1
+        const nextGroup = (s.group % 3) + 1;
+        return { ...s, group: nextGroup };
+      }
+      return s;
+    }));
+  };
+
+  const handleMarkAbsent = (id: string) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id === id) {
+        return { ...s, isPresent: false, group: undefined };
+      }
+      return s;
     }));
   };
 
@@ -94,7 +115,7 @@ export default function App() {
       setStudents(prev => prev.map(s => ({ 
           ...s, 
           isPresent: true,
-          group: Math.floor(Math.random() * 6) + 1
+          group: Math.floor(Math.random() * 3) + 1 
       })));
       logHistory('CHECK_IN', undefined, 'All students marked present with random groups');
     }
@@ -181,6 +202,8 @@ export default function App() {
                <RollCall 
                   students={students} 
                   onToggleAttendance={handleToggleAttendance}
+                  onCycleGroup={handleCycleGroup}
+                  onMarkAbsent={handleMarkAbsent}
                   onReset={handleResetAttendance}
                   onMarkAllPresent={handleMarkAllPresent}
                />
