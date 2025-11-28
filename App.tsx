@@ -6,7 +6,6 @@ import { Picker } from './components/Picker';
 import { Leaderboard } from './components/Leaderboard';
 import { exportDataToCSV } from './services/csvService';
 import { Users, Dices, Trophy, GraduationCap, Download, Save } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid'; // If uuid not available, simple counter works
 
 // Utility for simple IDs
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -74,8 +73,8 @@ export default function App() {
   const handleToggleAttendance = (id: string) => {
     setStudents(prev => prev.map(s => {
         if (s.id === id) {
-            // If marking present, assign random group 1-3
-            const randomGroup = Math.floor(Math.random() * 3) + 1;
+            // If marking present, assign random group 1 or 2
+            const randomGroup = Math.random() < 0.5 ? 1 : 2;
             return { ...s, isPresent: true, group: randomGroup };
         }
         return s;
@@ -85,8 +84,8 @@ export default function App() {
   const handleCycleGroup = (id: string) => {
     setStudents(prev => prev.map(s => {
       if (s.id === id && s.isPresent && s.group) {
-        // Cycle 1 -> 2 -> 3 -> 1
-        const nextGroup = (s.group % 3) + 1;
+        // Cycle 1 -> 2 -> 1
+        const nextGroup = s.group === 1 ? 2 : 1;
         return { ...s, group: nextGroup };
       }
       return s;
@@ -110,14 +109,14 @@ export default function App() {
   };
 
   const handleMarkAllPresent = () => {
-    // For testing, assign random groups
-    if (window.confirm("Mark everyone as present (Random Groups)?")) {
+    // For testing, assign random groups 1 or 2
+    if (window.confirm("Mark everyone as present (Random Groups 1 & 2)?")) {
       setStudents(prev => prev.map(s => ({ 
           ...s, 
           isPresent: true,
-          group: Math.floor(Math.random() * 3) + 1 
+          group: Math.random() < 0.5 ? 1 : 2 
       })));
-      logHistory('CHECK_IN', undefined, 'All students marked present with random groups');
+      logHistory('CHECK_IN', undefined, 'All students marked present');
     }
   };
 
@@ -126,6 +125,16 @@ export default function App() {
       s.id === id ? { ...s, score: s.score + points } : s
     ));
     logHistory('SCORE', id, points);
+  };
+
+  // Bonus for entire group
+  const handleGroupBonus = (groupId: number, points: number) => {
+    if (window.confirm(`Award +${points} points to every student in Group ${groupId}?`)) {
+      setStudents(prev => prev.map(s => 
+        (s.isPresent && s.group === groupId) ? { ...s, score: s.score + points } : s
+      ));
+      logHistory('SCORE', undefined, `Group ${groupId} Bonus +${points}`);
+    }
   };
 
   const handleSkip = (id: string) => {
@@ -220,7 +229,10 @@ export default function App() {
                 />
               </div>
               <div className="lg:col-span-1 order-2">
-                <Leaderboard students={students} />
+                <Leaderboard 
+                    students={students} 
+                    onGroupBonus={handleGroupBonus}
+                />
                 
                 <div className="mt-6 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
                   <div className="absolute top-0 right-0 opacity-10">

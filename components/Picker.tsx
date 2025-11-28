@@ -30,9 +30,8 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
 
   // Group colors for spinning UI
   const GROUP_COLORS = {
-    1: 'text-red-500',
-    2: 'text-blue-500',
-    3: 'text-emerald-500'
+    1: 'text-violet-500',
+    2: 'text-orange-500'
   };
 
   // Cleanup
@@ -50,12 +49,8 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
     setAiQuestion(null);
     speedRef.current = 50;
     
-    // Logic: "Counts of draws equally distributed among 3 groups"
-    // 1. Pick a random group (1-3)
-    // 2. Pick a random student from that group
-    // This ensures even if Group 1 has 20 people and Group 2 has 2, they have equal chance of being the "winning group".
-    
-    const availableGroups = [1, 2, 3].filter(g => students.some(s => s.isPresent && s.group === g));
+    // Logic: Pick Group 1 or 2, then pick a student.
+    const availableGroups = [1, 2].filter(g => students.some(s => s.isPresent && s.group === g));
     
     if (availableGroups.length === 0) {
         setIsSpinning(false);
@@ -93,7 +88,7 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
       }
 
       // Decaying speed
-      speedRef.current = Math.floor(speedRef.current * 1.15); // Faster decay for 2s duration
+      speedRef.current = Math.floor(speedRef.current * 1.15); 
       timerRef.current = window.setTimeout(spin, speedRef.current);
     };
 
@@ -141,6 +136,10 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
       setShowVolunteerModal(false);
       setAiQuestion(null);
   };
+
+  // Group students for volunteer modal
+  const group1Students = presentStudents.filter(s => s.group === 1);
+  const group2Students = presentStudents.filter(s => s.group === 2);
 
   return (
     <div className="w-full mx-auto flex flex-col gap-8 pb-12">
@@ -206,7 +205,7 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
          </div>
       )}
 
-      {/* Volunteer Modal */}
+      {/* Volunteer Modal - Grouped */}
       {showVolunteerModal && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -216,16 +215,35 @@ export const Picker: React.FC<PickerProps> = ({ students, onAddScore, onSkip }) 
                       </h3>
                       <button onClick={() => setShowVolunteerModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">Close</button>
                   </div>
-                  <div className="overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {presentStudents.map(s => (
-                          <button 
-                             key={s.id}
-                             onClick={() => handleVolunteerSelect(s)}
-                             className="p-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-left font-medium text-slate-700 truncate"
-                          >
-                              {s.name}
-                          </button>
-                      ))}
+                  
+                  <div className="overflow-y-auto p-4 flex flex-col gap-6">
+                      {/* Group 1 Section */}
+                      <div>
+                        <h4 className="font-bold text-violet-600 mb-2 border-b border-violet-100 pb-1">Group 1</h4>
+                        {group1Students.length === 0 ? <p className="text-slate-400 text-sm">No students present.</p> : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {group1Students.map(s => (
+                                  <button key={s.id} onClick={() => handleVolunteerSelect(s)} className="p-2 rounded border border-violet-100 bg-violet-50 hover:bg-violet-100 text-violet-800 text-sm font-medium text-left truncate">
+                                      {s.name}
+                                  </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Group 2 Section */}
+                      <div>
+                        <h4 className="font-bold text-orange-600 mb-2 border-b border-orange-100 pb-1">Group 2</h4>
+                        {group2Students.length === 0 ? <p className="text-slate-400 text-sm">No students present.</p> : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {group2Students.map(s => (
+                                  <button key={s.id} onClick={() => handleVolunteerSelect(s)} className="p-2 rounded border border-orange-100 bg-orange-50 hover:bg-orange-100 text-orange-800 text-sm font-medium text-left truncate">
+                                      {s.name}
+                                  </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
                   </div>
               </div>
           </div>

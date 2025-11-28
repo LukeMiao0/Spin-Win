@@ -12,10 +12,10 @@ interface RollCallProps {
   onMarkAllPresent: () => void;
 }
 
+// Updated colors: Violet (Group 1), Orange (Group 2)
 const GROUP_STYLES = {
-  1: { bg: 'bg-red-500', border: 'border-red-600', text: 'text-red-600', badge: 'text-red-600' },
-  2: { bg: 'bg-blue-500', border: 'border-blue-600', text: 'text-blue-600', badge: 'text-blue-600' },
-  3: { bg: 'bg-emerald-500', border: 'border-emerald-600', text: 'text-emerald-600', badge: 'text-emerald-600' },
+  1: { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-violet-600', badge: 'text-violet-600' },
+  2: { bg: 'bg-orange-500', border: 'border-orange-600', text: 'text-orange-600', badge: 'text-orange-600' },
 };
 
 export const RollCall: React.FC<RollCallProps> = ({ 
@@ -42,7 +42,7 @@ export const RollCall: React.FC<RollCallProps> = ({
           </button>
         </div>
         <p className="text-xs text-slate-400 mt-2">
-          Tap to check in (Random Group). Tap again to switch groups. Click X to remove.
+          Tap to check in (Randomly assigned Group 1 or 2). Tap again to switch groups. Click X to remove.
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export const RollCall: React.FC<RollCallProps> = ({
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-2">
         {students.map((student) => {
           const isPresent = student.isPresent;
-          const groupStyle = (isPresent && student.group) 
+          const groupStyle = (isPresent && student.group && GROUP_STYLES[student.group as keyof typeof GROUP_STYLES])
             ? GROUP_STYLES[student.group as keyof typeof GROUP_STYLES] 
             : null;
 
